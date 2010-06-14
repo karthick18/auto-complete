@@ -36,6 +36,8 @@ extern void link_word(const char *w, struct list_head *list, int tail);
 extern int read_words_file(struct auto_complete_node *node, const char *f, const char *tokens,
                            int (*line_callback)(const char *line, char **words, int *num_words, int *free_words));
 
+extern int compute_levenshtein(const char *source, const char *target);
+
 #ifdef __cplusplus
 }
 #endif

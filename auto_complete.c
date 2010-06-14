@@ -180,9 +180,13 @@ int read_words_file(struct auto_complete_node *node, const char *f,
     if(!fptr) return -1;
     while(fgets(buf, sizeof(buf), fptr))
     {
+        register char *s = buf;
         int l = strlen(buf);
         if(buf[l-1] == '\n')
             buf[l-1] = 0;
+        while(*s && isspace(*s)) ++s;
+        if(!*s || *s == '#') /*skip comments*/
+            continue;
         /*
          * split the file into words
          */
@@ -251,4 +255,45 @@ int init_auto_complete(struct auto_complete_node *node)
     list_init(&node->list);
     node->initialized = 1;
     return 0;
+}
+
+int compute_levenshtein(const char *s, const char *d)
+{
+#undef MIN
+#define __MIN(x,y) ( (x) < (y) ? (x) : (y) )
+#define MIN(a,b,c) __MIN(a, __MIN(b, c))
+    int *distance_matrix = NULL;
+    int min_distance = 0;
+    register int i, j;
+    int n = strlen(s);
+    int m = strlen(d);
+    if(!n) return m;
+    if(!m) return n;
+
+    distance_matrix = calloc((n+1) * (m+1), sizeof(*distance_matrix));
+    assert(distance_matrix);
+    for(i = 0; i <= n; ++i)
+        distance_matrix[i*(m+1)] = i;
+
+    for(j = 0; j <= m; ++j)
+        distance_matrix[j] = j;
+
+    for(i = 1; i <= n; ++i)
+    {
+        char s1 = s[i-1];
+        for(j = 1; j <= m ; ++j)
+        {
+            char d1 = d[j-1];
+            int cost = 0;
+            if(s1 != d1) cost = 1;
+            distance_matrix[i*(m+1) + j] = 
+                MIN(1 + distance_matrix[(i-1)*(m+1) + j],
+                    1 + distance_matrix[i*(m+1) + (j-1)],
+                    cost + distance_matrix[(i-1)*(m+1) + (j-1)]);
+        }
+    }
+    min_distance = distance_matrix[n*(m+1) + m];
+    free(distance_matrix);
+    return min_distance;
+#undef MIN
 }
