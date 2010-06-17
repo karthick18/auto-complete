@@ -1,0 +1,8 @@
+  Auto complete framework with a spell checker included. based on the added words.
+  The APIs are in auto_complete.h and the library is libautocomplete.a which also includes the spell_check routine.
+  To test: compile with: "make"
+  RUN as: ./auto_complete wordlist.txt <spell_check_word_list_separated_by_spaces>
+
+  Changes/comments for improvement are welcome.
+
+-Karthick : (a.r.karthick@gmail.com)

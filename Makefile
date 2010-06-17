@@ -1,19 +1,21 @@
 CC := gcc
 CFLAGS := -g -Wall -DSPELL_CHECKER
-SRCS := auto_complete.c main.c
+SRCS := main.c
+LDSRCS := auto_complete.c spell_check.c
 OBJS := $(SRCS:%.c=%.o)
-LIBS := -lrt
+LDOBJS := $(LDSRCS:%.c=%.o)
+LDLIBS := -lrt -L./. -lautocomplete
 TARGET := auto_complete
 AR := ar
 RANLIB := ranlib
 LIB_AUTOCOMPLETE := libautocomplete.a
 
-all :$(TARGET) $(LIB_AUTOCOMPLETE)
+all :$(LIB_AUTOCOMPLETE) $(TARGET)
 
 $(TARGET): $(OBJS)
-	$(CC) -o $@ $^ $(LIBS)
+	$(CC) -o $@ $^  $(LDLIBS)
 
-$(LIB_AUTOCOMPLETE): $(OBJS)
+$(LIB_AUTOCOMPLETE): $(LDOBJS)
 	@ (\
 	$(AR) cr  $@ $^;\
 	$(RANLIB) $@ ;\
@@ -23,4 +25,4 @@ $(LIB_AUTOCOMPLETE): $(OBJS)
 	$(CC) -c $(CFLAGS) -o $@ $<
 
 clean:
-	rm -f $(TARGET) *~ $(OBJS) $(LIB_AUTOCOMPLETE)
+	rm -f $(TARGET) *~ $(OBJS) $(LDOBJS) $(LIB_AUTOCOMPLETE)
