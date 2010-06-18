@@ -46,8 +46,6 @@ static __inline__ void list_add_tail(struct list *element, struct list_head *lis
     element->next = NULL;
     *(element->pprev = list->tail) = element;
     list->tail =  &element->next;
-    if(!list->head)
-        list->head = element;
     ++list->nodes;
 }
 

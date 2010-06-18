@@ -15,6 +15,8 @@ struct node
     unsigned int word:1;
 };
 
+struct auto_complete_opts auto_complete_opts;
+
 void link_word(const char *w, struct list_head *list, int tail)
 {
     struct word_list *l = calloc(1, sizeof(*l));
@@ -71,7 +73,7 @@ static int gather_words(char *word, struct node *node, struct list_head *head)
         int turns = 0;
         int len = strlen(word);
         prefix = strdup(word);
-        /*printf("Prefix [%d:%s]\n", len, word);*/
+        /*do_log("Prefix [%d:%s]\n", len, word);*/
         word = realloc(word, len+2);
         assert(word);
         word[len] = iter->c;
@@ -145,37 +147,41 @@ int add_word(struct auto_complete_node *node, const char *s)
 {
     assert(node && s );
     assert(node->initialized == 1);
-    printf("Adding word [%s]\n", s);
+    do_log("Adding word [%s]\n", s);
     add_node(s, 0, &node->root);
     return 0;
 }
 
-static void split_words(struct auto_complete_node *node, const char *line, const char *token)
+static void split_words(struct auto_complete_node *node, struct list_head *list, const char *line, const char *token)
 {
     char *line_copy, *s = NULL;
     char *tok;
-    assert(node && token);
+    if(!token) return;
     s = line_copy = strdup(line);
     while ( (tok = strtok(s, token) ) )
     {
-        const char *w;
         if(strlen(tok))
         {
-            if(!add_word(node, (w = strdup(tok))))
-                link_word(w, &node->list, 0);
+            const char *w = strdup(tok);
+            if(node)
+                add_word(node, w);
+            if(list)
+                link_word(w, list, 1);
         }
         if(s) s = NULL;
     }
     free(line_copy);
 }
 
-int read_words_file(struct auto_complete_node *node, const char *f, 
-                    const char *tokens, 
-                    int (*line_callback)(const char *line, char **words, int *num_words, int *free_word))
+int read_words(struct auto_complete_node *node, struct list_head *list,
+               const char *f,  const char *tokens,
+               int (*line_callback)(const char *line, char **words, int *num_words, int *free_word))
 {
     FILE *fptr = NULL;
     char buf[0xff+1];
-    assert(node && f);
+    if(!f) return -1;
+    if(node)
+        assert(node->initialized == 1);
     if(!tokens) tokens = WORD_TOKENS;
     fptr = fopen(f, "r");
     if(!fptr) return -1;
@@ -212,18 +218,28 @@ int read_words_file(struct auto_complete_node *node, const char *f,
                         w = strdup(words[i]);
                         assert(w);
                     }
-                    if(!add_word(node, w))
-                        link_word(w, &node->list, 0);
+                    if(node)
+                        add_word(node, w);
+                    if(list)
+                        link_word(w, list, 1);
 
                 }
             }
             free(words);
         }
         else
-            split_words(node, buf, tokens);
+            split_words(node, list, buf, tokens);
     }
+
     fclose(fptr);
     return 0;
+}
+
+int load_auto_complete(struct auto_complete_node *node, const char *f)
+{
+    if(!node || !f) return -1;
+    assert(node->initialized == 1);
+    return read_words(node, NULL, f, NULL, NULL); /*load wordlists into the auto complete db*/
 }
 
 int complete_word(struct auto_complete_node *node, const char *word, struct list_head *completion_list)
@@ -236,26 +252,29 @@ int complete_word(struct auto_complete_node *node, const char *word, struct list
     find_word(node->root, word, &status, &loc);
     if(!loc)
     {
-        printf("No prefix node found for word [%s]\n", word);
+        do_log("No prefix node found for word [%s]\n", word);
         return -1;
     }
     words = gather_words(strdup(word), loc->center, completion_list);
     assert(words == completion_list->nodes);
     if(!words)
     {
-        printf("No completion found for the word [%s]\n", word);
+        do_log("No completion found for the word [%s]\n", word);
     }
-    else printf("[%d] Completions found for the word [%s]\n", words, word);
+    else do_log("[%d] Completions found for the word [%s]\n", words, word);
     return 0;
 }
 
-int init_auto_complete(struct auto_complete_node *node)
+int init_auto_complete(struct auto_complete_node *node, const char *wordfile)
 {
+    int err = 0;
     assert(node);
     node->root = NULL;
     list_init(&node->list);
     spell_check_cache_init();
     node->initialized = 1;
-    return 0;
+    if(wordfile)
+        err = load_auto_complete(node, wordfile); /*suck in the dictionary*/
+    return err;
 }
 

@@ -45,7 +45,7 @@ void spell_check_cache_init(void)
     {
         spell_check_cache[i].completion = NULL;
         spell_check_cache[i].c = (char)('a' + i);
-        spell_check_cache[i].age = SPELL_CHECK_CACHE_AGE_MAX << 1; 
+        spell_check_cache[i].age = SPELL_CHECK_CACHE_AGE_MAX; 
     }
 }
 
@@ -58,13 +58,15 @@ static void list_destroy_cb(struct word_list *wl)
 static __inline__ void spell_check_cache_add(char c, struct list_head *completion)
 {
     struct list_head *last_completion;
+    int age = SPELL_CHECK_CACHE_AGE_MAX;
+    if(completion) age <<= 1;
     if(isupper(c)) c = tolower(c);
     c -= 'a';
     assert(c < MAX_CHARS);
     assert(spell_check_cache[(int)c].c == c + 'a');
     last_completion = spell_check_cache[(int)c].completion;
     spell_check_cache[(int)c].completion = completion;
-    spell_check_cache[(int)c].age = SPELL_CHECK_CACHE_AGE_MAX;
+    spell_check_cache[(int)c].age = age;
     if(last_completion)
         list_destroy(last_completion, struct word_list, list, list_destroy_cb);
 }
@@ -116,7 +118,7 @@ static char *completion_map_get(char c)
  * Check if the auto completion word is already a super/sub-set of the existing word in the wordlist.
  * Take 70% of the src/dst string for a subset match.
  */
-static int is_contained_word(struct levenshtein_word *wordlist, int num_words, const char *word)
+static int is_contained_word(struct spell_check_word *wordlist, int num_words, const char *word)
 {
 #define MIN_LEN (0x7)
     register int i;
@@ -143,7 +145,7 @@ static int is_contained_word(struct levenshtein_word *wordlist, int num_words, c
         }
         if(!cmp)
         {
-            printf("Skipping word [%s] coz of [%s]\n", word, wordlist[i].word);
+            do_log("Skipping word [%s] coz of [%s]\n", word, wordlist[i].word);
             return 1;
         }
     }
@@ -195,11 +197,11 @@ int compute_levenshtein(const char *s, const char *d)
 
 static int levenshtein_cmp(const void *a, const void *b)
 {
-    return ((struct levenshtein_word*)a)->val - ((struct levenshtein_word*)b)->val;
+    return ((struct spell_check_word*)a)->weight - ((struct spell_check_word*)b)->weight;
 }
 
 int spell_check(struct auto_complete_node *auto_complete, const char *w, 
-                struct levenshtein_word *wordlist, int *num_words)
+                struct spell_check_word *wordlist, int *num_words)
 {
     int l,al_match;
     int scantill = 0;
@@ -208,6 +210,9 @@ int spell_check(struct auto_complete_node *auto_complete, const char *w,
     int count = 0;
     int word_limit = 0;
     char insert_map[0xff+1] = {0};
+
+    if(!auto_complete || !w ) return -1;
+
     if(num_words && !(word_limit = *num_words))
         return 0;
 
@@ -216,7 +221,7 @@ int spell_check(struct auto_complete_node *auto_complete, const char *w,
 
     if(!w || (l = strlen(w)) < 3)
     {
-        printf("[%s] too short for spell check as min. length is [%d]. Skipping correction\n", w, l);
+        do_log("[%s] too short for spell check as min. length is [%d]. Skipping correction\n", w, l);
         return 0;
     }
     
@@ -266,7 +271,7 @@ int spell_check(struct auto_complete_node *auto_complete, const char *w,
                 val = compute_levenshtein(w, acw); /*compute the levenshtein distance*/
                 if(!val)  /* if direct hit or match then break */
                 {
-                    printf("[%s] already spelled correctly\n", w);
+                    do_log("[%s] already spelled correctly\n", w);
                     reset = 1;
                     goto out_age;
                 }
@@ -289,7 +294,7 @@ int spell_check(struct auto_complete_node *auto_complete, const char *w,
                             }
                         }
                         wordlist[count].word = acw;
-                        wordlist[count].val = val;
+                        wordlist[count].weight = val;
                     }
                     ++count;
                 }
@@ -307,12 +312,12 @@ int spell_check(struct auto_complete_node *auto_complete, const char *w,
     if(!realloc_flag)
         goto out_age;
 
-    printf("[%d] spell check suggestions found for word [%s]. Displaying [%d]\n", count, w, l);
+    do_log("[%d] spell check suggestions found for word [%s]. Displaying [%d]\n", count, w, l);
 
     for(i = 0; i < l; ++i)
     {
-        if(wordlist[i].val > 0)
-            printf("Spell check suggestion [%d] - [%s]\n", i+1, wordlist[i].word);
+        if(wordlist[i].weight > 0)
+            do_log("Spell check suggestion [%d] - [%s]\n", i+1, wordlist[i].word);
     }
 
     if(realloc_flag)
